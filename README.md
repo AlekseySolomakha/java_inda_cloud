@@ -15,36 +15,57 @@ Project to show transition from Monolith application to clustered microservice a
 
 ## Microservices
 
-`git checkout microservices` to return.
-
-## Cloud orchestration
-
 ### Theory
 
-Containers engines provide an ability to cut the corners of `VM` style solutions and instead of heavy Guest OS you
-use layered containers.
+Microservices - set of *loosely* coupled services.
 
 ### Develop
 
-Create Dockerfiles `cat pc/Dockerfile`:
+Split your application into several:
 
-```
-FROM openjdk:8-jdk-alpine
-VOLUME /tmp
-EXPOSE 8080
-EXPOSE 5005
-ENV JAVA_OPTS="-Xmx400m -Dfile.encoding=UTF-8 -agentlib:jdwp=transport=dt_socket,address=5005,server=y,suspend=n"
-ADD target/pc-0.0.1-SNAPSHOT.jar app.jar
-ENTRYPOINT exec java $JAVA_OPTS -Djava.security.egd=file:/dev/./urandom -jar /app.jar
+```xml
+    <modules>
+        <module>product-catalog</module>
+        <module>product-ordering</module>
+    </modules>
 ```
 
-Use Docker DNS hosts in `application.properties`:
+Catalog in our case would be the same: `cat product_catalog/src/main/java/org/ais/product_catalog/catalog/ProductSpecificationRepository.java`.
 
-```properties
-eureka.instance.preferIpAddress=true
-eureka.client.serviceUrl.defaultZone=http://eureka:8761/eureka/
-spring.cloud.config.enabled=false
-spring.application.name=pc
+Ordering would have a new configuration: `cat product-ordering/src/main/java/org/ais/product-ordering/FeignConfiguration.java`.
+Feign clients make it easier to communicate with different services, as it simply another Java object.
+Let's look into ` product_ordering/src/main/java/org/ais/product_ordering/order/clients/ProductSpecificationRepository.java`:
+
+```java
+@FeignClient(name = "catalog", url = "localhost:8081", configuration = FeignConfiguration.class)
+public interface ProductSpecificationRepository {
+
+    @RequestMapping(method = RequestMethod.GET, path = "/catalog/{specificationId}")
+    Object existsById(@PathVariable("specificationId") String specificationId);
+}
+```
+
+And now we can use another services as usual ` product_ordering/src/main/java/org/ais/product_ordering/order/OrderController.java`:
+
+```java
+@RestController
+public class OrderController {
+    private final ProductOrderRepository orderRepository;
+    private final ProductSpecificationRepository specificationRepository;
+
+    public OrderController(ProductOrderRepository orderRepository, ProductSpecificationRepository specificationRepository) {
+        this.orderRepository = orderRepository;
+        this.specificationRepository = specificationRepository;
+    }
+
+    @PutMapping("/catalog/{specificationId}/order")
+    public ProductOrder orderProductBySpecificationId(@PathVariable String specificationId) {
+        if (specificationRepository.existsById(specificationId) == null) {
+            throw new RuntimeException("There is no product specification with Id: " + specificationId);
+        }
+        return orderRepository.save(new ProductOrder(null, specificationId, 1l));
+    }
+}
 ```
 
 ### Build
@@ -55,21 +76,21 @@ mvn clean package
 
 ### Prepare environment
 
-Service Discovery:
+```bash
+docker-compose up -d
+```
 
-```
-services:
-  eureka:
-    image: springcloud/eureka
-    ports:
-      - "8761:8761"
-```
+Update `application.properties` and set different ports for your services.
 
 ### Deploy
 
 ```bash
-docker-compose up -d
+java -jar product_catalog/target/product-catalog-0.0.1-SNAPSHOT.jar
 
+```
+
+```bash
+java -jar product_ordering/target/product-ordering-0.0.1-SNAPSHOT.jar
 ```
 
 ### Use
@@ -105,8 +126,16 @@ curl --request PUT \
 - -Limitations of environment scalability-
 - -Problems with development scalability- 
 - -Fixed technical stack-
-- -Infrastructure dependencies- 
+- -Infrastructure dependencies- ?
+
+Microservices specific:
+
 - Hard to test
-- -Hard to configure deployment- 
+- Hard to configure deployment
 - Resources consumption
+
+## Containerization
+
+`git checkout containers` to continue.
+
 
