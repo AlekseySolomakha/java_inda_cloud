@@ -1,0 +1,21 @@
+server:
+  port: 8081
+spring:
+  data:
+    mongodb:
+      host: localhost
+      name: embedded_db
+  application:
+    name: cloud-api-gateway
+  main:
+    allow-bean-definition-overriding: true
+zuul:
+  routes:
+    catalog:
+      serviceId: cloud-product-catalog
+      path: /catalog/**
+      stripPrefix: false
+    order:
+      serviceId: cloud-product-order
+      path: /order/**
+      stripPrefix: false

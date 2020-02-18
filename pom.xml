@@ -27,5 +27,6 @@
     <modules>
         <module>product_catalog</module>
         <module>product_ordering</module>
+        <module>api-gateway</module>
     </modules>
 </project>
